@@ -1,0 +1,60 @@
+CREATE table mytable(
+fname STRING,
+lname STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' STORED AS TEXTFILE;
+
+LOAD DATA LOCAL INPATH ‘pythonhive.txt’ OVERWRITE INTO TABLE mytable;
+
+--------------
+RAVI kumar
+Anish kumar
+Rakesh jha
+Vishal kumar
+Ananya ghosh
+-----------------
+
+import sys
+import datetime
+for line in sys.stdin:
+line = line.strip()
+fname , lname = line.split('\t')
+l_name = lname.lower()
+print '\t'.join([fname, str(l_name)])
+
+----------------
+add file /home/achana/abovepythonfile.py;
+SELECT TRANSFORM (col_name) //Line 1
+
+USING ‘python python_script’ //Line 2
+
+AS (col_names) //Line 3
+
+FROM table_name; //Line 4
+
+-------
+SELECT TRANSFORM(fname, lname) USING 'myhive.py' AS (fname, l_name) FROM mytable123;
+
+
+
+
+
+
+
+
+
+----------------------------------
+
+#!/usr/bin/env python
+import sys
+
+# Hive passes each line as an argument
+for line in sys.stdin:
+    line = line.strip()
+    print(len(line))
+
+chmod +x string_length.py
+
+SELECT TRANSFORM(line)
+USING 'python string_length.py'
+AS output_length
+FROM input_strings;s

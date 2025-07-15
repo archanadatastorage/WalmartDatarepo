@@ -1,0 +1,27 @@
+Creating the table
+-------------------
+create table complex_data_type
+(
+emp_id int,
+name map<string, string>,
+location struct<city:string, pin:int>,
+skill_set array<string>
+)
+row format delimited fields terminated by '\t'               
+collection items terminated by ','
+map keys terminated by ':'; 
+
+Sample data file
+-----------------
+101	first:Amit,last:Mishra		bbsr,751024	Hadoop,Hive
+102	first:Aditya,last:Kulkarni	bnglr,123412	Hadoop,Hive,Oracle
+
+Loading data in the table
+--------------------------
+LOAD DATA LOCAL INPATH '/home/acadgild/hive/complex_data_type.txt'
+OVERWRITE INTO TABLE complex_data_type;
+
+Querying the table
+-------------------
+SELECT emp_id, name, location, skill_set FROM complex_data_type;
+SELECT emp_id, name['first'], location.city, skill_set[0] FROM complex_data_type;
