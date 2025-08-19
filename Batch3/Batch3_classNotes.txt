@@ -1,0 +1,413 @@
+
+
+apache Hive
+Apache spark
+Kafka
+Koalas
+
+
+--------------------------------
+
+Big data
+
+- Volume : TB,PB,YB,ZB
+- Velocity : ms, sec, min...
+- Vareity : struct, semi struct, ,unstruct
+
+distributed
+
+cluster : Group of devices/machines part of same network
+Node : each member
+
+
+
+Google
+distributed Storage
+distributed Engine
+distributed App
+
+Apache Hadoop
+
+distributed Storage : HDFS
+distributed Engine : YARN
+distributed App : Map Reduce
+
+- java framework
+- large in size
+- data immutability 
+- commodity hardware 
+- Replication
+- open source
+
+
+java MR code
+
+Apache Hive
+
+* SQL code -> compiler -> java MR code
+* Java Framework
+* Hadoop data warehouse
+* Facebook
+* HQL / Hive QL
+	Schema	: Metastore
+			RDBMS
+				- Derby
+				- MySQL/Oracle/SQlServer/Postgres
+	Data	: HDFS
+
+Dataproc
+
+client : home location
+	/home/nameuser
+
+HDFS : home location
+	/user/nameuser
+
+
+ Table
+
+1. Hive Managed table / internal
+
+Create table userdata
+
+
+
+location : the data belong to table must be in a folder on HDFS
+
+	- default/ system defined : /user/hive/warehouse/walmart.db/userdata
+
+	- Custom location
+
+load data 
+	cut/paste
+
+
+drop table
+	- loose schema
+	- loose data
+
+
+2. External Table
+
+drop table
+	- loose schema
+
+create external table userdata
+(
+id int,
+ename string,
+deptno int,
+skill varchar(10)
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+--------------------------
+
+File format
+
+	- BOF/ EOF
+	- BOR/EOR
+	- how data stored
+
+	(reader/writer)/parser  - lib
+
+	
+   Text file
+		- human readible
+		- highly portable
+		- no schema
+		- everything data
+		- string/text
+		- various delimiter
+
+    XML	
+		- xsd : schema
+		- xml : data
+		- human readible
+		- poorly portable
+		- fixed delimiter
+
+   Java Sequential file
+		- schema + data
+		- binary
+		- fixed delimiter
+		- java parser
+		- poorly portable
+
+   Avro	
+		- schema + data
+		- binary
+		- fixed delimiter
+		- lang neutral parser
+		- highly portable
+		- row wise
+
+  Parquet
+		- schema + data
+		- binary
+		- fixed delimiter
+		- lang neutral parser
+		- highly portable
+		- col wise
+
+  RC 
+  json
+		- schema + data
+		- human readible
+		- fixed delimiter
+		- lang neutral parser
+		- highly portable
+		- row wise
+
+  BSON
+  ORC
+		- Optimized Row columner
+
+
+-------------------
+
+
+Text_table			text file
+
+
+write the data into prq_table    (OutputFormat)	   Insert into
+read the data from Text_table    (InputFormat)     select
+
+
+---------------------
+
+
+
+ Reorganize the data of the table /folder
+
+
+- Partition : exactly value  =  city
+
+ /user/hive/warehouse/walmart.db/customer/city='Delhi'/
+ /user/hive/warehouse/walmart.db/customer/city='Mumbai'/
+ /user/hive/warehouse/walmart.db/customer/city='Indore'/
+
+
+static : manually = 1 parition
+dynamic : processing : multiple partitions
+
+show partitions <table >;
+
+- Bucketing : formula
+
+   hashcode(city)%num_of_buckets
+	hashcode('delhi')%10
+  = 200%10 =0
+= 300%10=
+num_of_buckets = num_of_files = 0 to no-1
+  sort
+
+SMB Join
+
+desc formatted <table>
+show create table <table>
+
+
+------------------
+
+Batch data processing : Java Map Reduce code, Pig,Hive, Tez
+Real time data processing : Storm
+MAchine Learning : Mahout
+Graph Theory : Giraph
+
+
+Apache Spark
+- scala Framework to create distributed application
+- open source
+- General purpose app
+- Lambda architecture
+- Faster
+- Core Spark :
+	RDD - Resilient Distributed Dataset
+	- collection of serialized /object
+	- immutable
+	- Operations : Functional Programming
+		Transformation : New RDD
+		Action	: No New RDD			job
+
+  Read -> Ucase -> I -> Display
+  RDD1 -> RDD2 -> RDD3
+
+	- lazy executable
+	- DAG : execution plan
+- Polyglot : scala, python, java (jdk 1.8), R
+- Resource Manager
+	Local				webUI :4040
+		2
+		*	
+	Cluster
+		YARN			webUI:
+		Spark Standalone	webui:8080
+		mesos			webui:8080
+		K8			webui
+- Lineage
+- Executor
+	task /slot = Thread
+
+
+Spark App
+	- REPL/shell : scala, python,R
+	- Program file : scala, python,Java,R
+
+
+SparkContext
+	- 1 sc
+	- app execution
+	- status
+	- failover : 4 attempts
+
+java - 1.8			:JAVA_HOME
+scala - 2.12			:SCALA_HOME
+python - 3.8			:PYTHON_HOME
+spark - 3.4			:SPARK_HOME
+winutils  :/hadoop/bin		: HADOOP_HOME
+pip install findspark
+
+
+
+Create RDD
+
+- read files
+- RDD -> RDD2
+- casting
+
+
+--------------------
+
+SparkSQL
+
+* Spark SQL -> Spark SQL Engine -> spark Functional code
+* Optimizer
+* faster
+* Schama + data = SchemaBasedRDD =DataFrame = RDD[Row(fields1:value1,field2:val2...)]
+* SQlContext(sc)
+* HiveContext(sc)
+
+
+{SparkConf + SparkContext + SQlContext/HiveContext} = SparkSession
+	multiple SparkSession objects
+
+setMaster	- master
+setAppName	- appName()
+set()		- config()
+
+pyspark.sql
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
