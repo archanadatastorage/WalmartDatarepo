@@ -298,6 +298,87 @@ set()		- config()
 pyspark.sql
 
 
+spark-submit driverProgram
+spark-submit driverProgram [argu]
+spark-submit --packages org.apache.spark:spark-avro_2.12:3.3.2 Avrodatacode.py as
+Location
+	LOS -	 file://absolute path
+	hdfs 	-  hdfs://ip:port/absolute path
+	GCP bucket-  gs://sampledataaug
+
+
+org.apache.spark:spark-avro_2.12:3.3.2
+
+
+Schema Manually:
+	- embed the schema to the schemaless data
+	- Lazy Execution
+
+
+Spark SQL
+	- where(),select(),orderBy()
+	- Std SQL
+	select * from table/view
+
+join
+
+* cross join = nxm  n= 5 , m= 97320  = 486600
+* Inner Join = cross join + condition(s) = Match Records = 33
+*Outer join = Inner join = Match Records + unmatch
+	- left =  Match Records + left unmatch = 33+2 = 35
+	- Right =  Match Records + Right unmatch = 33 +97298 =97331
+	- Full =  Match Records + (left +right) unmatch = 33 +2+
+- Left Semi Join = left row hv match
+- Left Ani Join = left rows hv no match
+
+---------------
+
+Stream/ Real-time data/event/message = unit of data/object
+
+
+Apache Kafka
+
+- java Streaming Framework
+- Loosly coupled
+- Open source
+- Linked in
+- High throughput
+- low latency
+- Producer : Any App that pushes streams to the kafka
+- Consumer : Any that pulls the streams from the kakfa 
+- Broker / Kafka Server 
+	- 1 instance of kafka
+	- id 
+	- ip:port
+-Topic : Arbitary name
+	- Partition(s) : hold streams in memory
+		- offset : unique id for stream in a partition
+		- Segement(s) : file(s)
+		- index
+		- timeIndex
+		- log-dirs : folder
+
+
+- replication
+- retain stream
+	- time	: 7 days
+	- size
+- Peer-to-peer
+- zookeeper
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
