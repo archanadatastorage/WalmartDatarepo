@@ -1,0 +1,190 @@
+column pruning in spark sql
+
+Column pruning in Spark SQL is an optimization technique where Spark only reads and processes the columns that are actually required for a query, instead of scanning all columns of a table or DataFrame.
+
+This reduces I/O, memory usage, and CPU cost, especially when working with wide datasets (tables with many columns).
+
+🔹 How Column Pruning Works
+
+Logical Plan Optimization
+
+When you run a query, Spark builds a logical plan.
+
+The Catalyst optimizer checks which columns are actually used.
+
+Unused columns are dropped from the plan.
+
+Physical Plan Execution
+
+Spark generates a physical plan that scans only the required columns from the source (like Parquet, ORC, Delta, etc.).
+
+For file formats supporting columnar storage (Parquet/ORC), Spark reads only the needed columns from disk.
+
+🔹 Example 1 – Simple Column Pruning
+df = spark.read.parquet("hdfs://path/to/data")
+
+# DataFrame has 50 columns, but we only need 2
+result = df.select("id", "name")
+result.explain(True)
+
+
+What happens?
+
+Spark’s optimizer will prune away the other 48 columns.
+
+The physical plan will show only id and name being read.
+
+🔹 Example 2 – Spark SQL Query
+SELECT id, name FROM employees;
+
+
+Even if employees has 100 columns, Spark will only scan id and name.
+
+🔹 When Column Pruning Works Best
+
+✅ Columnar formats (Parquet, ORC, Delta Lake) – Spark can skip reading unnecessary columns at the file I/O level.
+✅ Pushdown Filters + Column Pruning – combined with predicate pushdown, Spark avoids reading irrelevant rows and columns.
+✅ Nested Columns – Spark supports nested column pruning (struct types).
+
+🔹 Example 3 – Nested Column Pruning
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+data = [(1, ("Alice", "NY")), (2, ("Bob", "CA"))]
+schema = StructType([
+    StructField("id", IntegerType()),
+    StructField("info", StructType([
+        StructField("name", StringType()),
+        StructField("city", StringType())
+    ]))
+])
+
+df = spark.createDataFrame(data, schema)
+
+# Only select nested "name" field
+df.select("info.name").explain(True)
+
+
+👉 Spark prunes info.city and only reads info.name.
+
+🔹 When Column Pruning Does NOT Work
+
+If the source format is row-based (like CSV, JSON, Avro), Spark must still read the full row and then discard unused columns.
+
+If you use UDFs (User Defined Functions) on entire rows, pruning may not be effective since Spark may need the full row.
+
+If your query explicitly requires all columns (SELECT *).
+
+⚡ Tip: Always avoid SELECT * in Spark SQL/DataFrames unless necessary. It prevents column pruning and wastes resources.
+
+---------
+push down predicate in spark
+
+What is Predicate Pushdown?
+
+Predicate Pushdown means Spark pushes filtering conditions (WHERE clauses) closer to the data source so that only the required rows are read from disk or database, instead of reading everything and then filtering inside Spark.
+
+👉 This reduces:
+
+I/O (less data read from disk or DB)
+
+Network traffic (when reading from external DBs)
+
+CPU & Memory usage
+
+It’s especially powerful when combined with column pruning.
+
+🔹 How It Works
+
+Spark’s Catalyst Optimizer analyzes the query plan.
+
+If the source supports predicate pushdown (e.g., Parquet, ORC, Delta, JDBC), Spark sends filter conditions to the source.
+
+The source applies the filter before returning data to Spark.
+
+🔹 Example 1 – Parquet with Predicate Pushdown
+df = spark.read.parquet("hdfs://path/to/employees")
+
+# Filtering: only employees in "NY"
+filtered_df = df.filter(df.city == "NY")
+filtered_df.explain(True)
+
+explain() output (simplified):
+PushedFilters: [EqualTo(city,NY)]
+
+
+👉 Spark tells the Parquet reader: "Only load rows where city = NY."
+
+🔹 Example 2 – JDBC Predicate Pushdown
+jdbcDF = spark.read \
+    .format("jdbc") \
+    .option("url", "jdbc:mysql://localhost:3306/hr") \
+    .option("dbtable", "employees") \
+    .option("user", "root") \
+    .option("password", "pwd") \
+    .load()
+
+filtered = jdbcDF.filter("salary > 10000")
+filtered.explain(True)
+
+
+👉 Spark will generate an SQL query:
+
+SELECT * FROM employees WHERE salary > 10000
+
+
+So only matching rows are brought from MySQL.
+
+🔹 Supported Data Sources
+
+✅ Columnar formats – Parquet, ORC, Delta Lake (very efficient)
+✅ Relational DBs – via JDBC (MySQL, PostgreSQL, Oracle, etc.)
+✅ NoSQL (depends on connector) – Cassandra, MongoDB, etc.
+✅ Cloud storage connectors – Some GCS/S3 readers support pushdown
+
+❌ Row-based formats like CSV, JSON – Spark must read all rows first, then apply filters in memory (no real pushdown).
+
+🔹 Example 3 – Combining Column Pruning + Predicate Pushdown
+df = spark.read.parquet("hdfs://path/to/data")
+
+# Only select needed columns + filter
+result = df.select("id", "name").filter(df.age > 30)
+result.explain(True)
+
+
+👉 explain() will show:
+
+PushedFilters: [GreaterThan(age,30)]
+
+
+and only id, name columns are read.
+This saves both rows + columns.
+
+🔹 When Predicate Pushdown Doesn’t Work
+
+If you use UDFs inside filters (filter(my_udf(df.col))) → Spark can’t push that down.
+
+If the data source does not support pushdown (e.g., plain text, JSON, CSV).
+
+Complex conditions sometimes get only partially pushed down.
+
+✅ Best Practice Tip: Always filter as close to the source as possible (WHERE in SQL / .filter() in DataFrame API) instead of collecting everything into Spark first.
+
+Open the Spark UI
+
+If running locally → open http://localhost:4040
+.
+
+On a cluster (YARN/Dataproc/EMR/Databricks) → Spark UI is available through the cluster manager.
+
+Go to the “SQL” tab
+
+Each query will appear as an entry.
+
+Click on the query name (it will say something like == Physical Plan ==).
+
+Look at the Physical Plan (Details page)
+
+You’ll see operators like FileScan parquet, FileScan orc, JDBCRelation, etc.
+
+Inside that, look for PushedFilters.
+--------
