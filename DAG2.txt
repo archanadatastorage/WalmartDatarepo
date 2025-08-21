@@ -1,0 +1,108 @@
+What is DAG in PySpark?
+
+In PySpark (and Spark in general), a DAG is the logical execution plan of your job.
+
+Directed → edges have a direction (one operation depends on another).
+
+Acyclic → no loops; once an operation is done, Spark won’t go back.
+
+Graph → represents transformations on your RDDs/DataFrames as nodes and dependencies as edges.
+
+Every Spark job you run is internally represented as a DAG of stages and tasks.
+
+🔹 How DAG is Built in PySpark?
+
+User Code → Transformations
+
+When you apply transformations (e.g., map, filter, select, withColumn), Spark doesn’t run them immediately.
+
+Instead, it builds a logical execution plan (DAG) that records what needs to be done.
+
+Action Trigger → Job Creation
+
+Only when you call an action (collect(), show(), count(), write()), Spark submits the DAG to the DAG Scheduler.
+
+DAG Scheduler → Stages
+
+DAG Scheduler breaks the DAG into stages based on shuffle boundaries.
+
+A stage is a set of tasks that can be executed in parallel.
+
+Task Scheduler → Tasks
+
+Each stage is further divided into tasks (one per partition).
+
+These tasks are distributed across cluster nodes/executors.
+
+🔹 Example of DAG in PySpark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("DAGDemo").getOrCreate()
+
+# Step 1: Load data (Stage 1)
+df = spark.read.csv("file:///C:/temp/sample.csv", header=True, inferSchema=True)
+
+# Step 2: Transformation (still lazy, DAG built)
+df2 = df.filter(df["age"] > 25).select("name", "age")
+
+# Step 3: Another transformation
+df3 = df2.groupBy("age").count()
+
+# Step 4: Action (triggers DAG execution)
+df3.show()
+
+
+read.csv → initial RDD/DataFrame creation.
+
+filter, select, groupBy → add nodes in the DAG (lazy).
+
+show() → triggers Spark to compute.
+
+👉 When you run this, Spark builds a DAG and submits it to the scheduler. You can see it in the Spark UI → SQL tab.
+
+🔹 DAG in Spark UI
+
+When you run a job and open Spark UI (http://localhost:4040
+):
+
+Go to SQL tab → you’ll see a visual DAG diagram.
+
+It shows:
+
+Nodes = stages.
+
+Edges = shuffle dependencies.
+
+Shuffle = where data has to be redistributed across nodes (e.g., groupBy, join).
+
+🔹 DAG Optimizations
+
+Spark applies several optimizations before execution:
+
+Catalyst Optimizer (Logical Plan)
+
+For DataFrame/Dataset API, Catalyst builds an optimized logical plan before DAG creation.
+
+Stage Pipelining
+
+Transformations like map, filter, withColumn are narrow dependencies → can be combined into one stage.
+
+Shuffle Boundaries
+
+Wide transformations (groupBy, join, distinct) introduce shuffles → cause new stage in DAG.
+
+🔹 DAG vs Lineage Graph
+
+DAG = execution plan with stages & tasks for a job.
+
+Lineage Graph = how an RDD/DataFrame was derived (used for fault tolerance).
+
+Example: If one partition is lost, Spark uses lineage to recompute it.
+
+🔹 Key Takeaways
+
+✅ DAG is the execution plan Spark builds before running a job.
+✅ It is lazy → only materialized when an action is called.
+✅ DAG Scheduler splits into stages, Task Scheduler executes tasks.
+✅ You can visualize DAG in Spark UI → SQL tab.
+✅ Optimizations (Catalyst + shuffle minimization) happen before DAG execution.
