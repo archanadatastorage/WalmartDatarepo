@@ -1,1 +1,167 @@
 time travel in pyspark using delta lake
+time travel in pyspark using delta lake
+
+-------------
+What is Time Travel in Delta Lake?
+
+Delta Lake maintains transaction logs (_delta_log) for all data changes (insert, update, delete, merge).
+Using these logs, you can read older snapshots of the table by specifying:
+
+Version number
+
+Timestamp
+
+🔹 Syntax in PySpark
+1. By Version Number
+from delta.tables import DeltaTable
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("DeltaTimeTravel") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
+
+# Table path
+delta_path = "/path/to/delta-table"
+
+# Read a specific version
+df_version = spark.read.format("delta").option("versionAsOf", 2).load(delta_path)
+df_version.show()
+
+2. By Timestamp
+# Read table as it existed at a specific timestamp
+df_time = spark.read.format("delta").option("timestampAsOf", "2025-08-20 10:30:00").load(delta_path)
+df_time.show()
+
+
+📌 Timestamp format must match the format used by Spark SQL (yyyy-MM-dd HH:mm:ss).
+
+3. SQL Query (Delta Table Registered in Hive Metastore)
+# Using SQL with version
+spark.sql("SELECT * FROM delta.`/path/to/delta-table` VERSION AS OF 2").show()
+
+# Using SQL with timestamp
+spark.sql("SELECT * FROM delta.`/path/to/delta-table` TIMESTAMP AS OF '2025-08-20 10:30:00'").show()
+
+🔹 Find Available Versions
+
+To see history of a Delta table:
+
+deltaTable = DeltaTable.forPath(spark, delta_path)
+deltaTable.history().show(truncate=False)
+
+
+This will show commits (operations, timestamps, version numbers, user info, etc.).
+
+🔹 Restore a Table to Previous Version
+
+If you want to rollback to a previous state:
+
+# Restore full table to version 2
+spark.sql("RESTORE TABLE delta.`/path/to/delta-table` TO VERSION AS OF 2")
+
+# Or restore to a timestamp
+spark.sql("RESTORE TABLE delta.`/path/to/delta-table` TO TIMESTAMP AS OF '2025-08-20 10:30:00'")
+
+
+✅ Summary:
+
+Use .option("versionAsOf", n) or .option("timestampAsOf", ts) for time travel.
+
+Use history() to view commit logs.
+
+Use RESTORE to roll back data.
+--------------------
+
+
+create a step-by-step demo script (with data insert, update, delete → then time travel) that you can run locally in PySpark to test this?
+
+
+Full Demo: Delta Lake Time Travel in PySpark
+from pyspark.sql import SparkSession
+from delta.tables import DeltaTable
+
+# ------------------------------------
+# 1. Create Spark Session with Delta support
+# ------------------------------------
+spark = SparkSession.builder \
+    .appName("DeltaTimeTravelDemo") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
+
+# Path for local delta table (adjust path for Windows)
+delta_path = "file:///C:/temp/delta_table_demo"
+
+# Clean up old data if exists
+import shutil, os
+if os.path.exists("C:/temp/delta_table_demo"):
+    shutil.rmtree("C:/temp/delta_table_demo")
+
+# ------------------------------------
+# 2. Initial Write (Version 0)
+# ------------------------------------
+data0 = [(1, "Alice"), (2, "Bob"), (3, "Cathy")]
+df0 = spark.createDataFrame(data0, ["id", "name"])
+df0.write.format("delta").save(delta_path)
+
+print("==== Initial Data (Version 0) ====")
+spark.read.format("delta").load(delta_path).show()
+
+# ------------------------------------
+# 3. Insert new rows (Version 1)
+# ------------------------------------
+data1 = [(4, "David"), (5, "Eve")]
+df1 = spark.createDataFrame(data1, ["id", "name"])
+df1.write.format("delta").mode("append").save(delta_path)
+
+print("==== After Insert (Version 1) ====")
+spark.read.format("delta").load(delta_path).show()
+
+# ------------------------------------
+# 4. Update rows (Version 2)
+# ------------------------------------
+deltaTable = DeltaTable.forPath(spark, delta_path)
+deltaTable.update(
+    condition="id = 2",
+    set={"name": "'Bobby'"}
+)
+
+print("==== After Update (Version 2) ====")
+spark.read.format("delta").load(delta_path).show()
+
+# ------------------------------------
+# 5. Delete rows (Version 3)
+# ------------------------------------
+deltaTable.delete("id = 3")
+
+print("==== After Delete (Version 3) ====")
+spark.read.format("delta").load(delta_path).show()
+
+# ------------------------------------
+# 6. View History
+# ------------------------------------
+print("==== Delta Table History ====")
+deltaTable.history().show(truncate=False)
+
+# ------------------------------------
+# 7. Time Travel: Read old versions
+# ------------------------------------
+print("==== Version 0 (Initial Data) ====")
+spark.read.format("delta").option("versionAsOf", 0).load(delta_path).show()
+
+print("==== Version 1 (After Insert) ====")
+spark.read.format("delta").option("versionAsOf", 1).load(delta_path).show()
+
+print("==== Version 2 (After Update) ====")
+spark.read.format("delta").option("versionAsOf", 2).load(delta_path).show()
+
+# ------------------------------------
+# 8. Time Travel: Read by Timestamp
+# ------------------------------------
+# Get timestamp of version 1 from history() above and replace below
+# Example timestamp: '2025-08-21 13:20:00'
+df_ts = spark.read.format("delta").option("timestampAsOf", "2025-08-21 13:20:00").load(delta_path)
+print("==== Time Travel by Timestamp ====")
+df_ts.show()
