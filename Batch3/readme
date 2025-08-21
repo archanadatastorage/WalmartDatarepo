@@ -366,7 +366,81 @@ Apache Kafka
 - Peer-to-peer
 - zookeeper
 
+start once run forever
 
+
+
+Confluent: Commercialized Kafka
+	WebUI
+	Connector
+	KStream
+	KSQL
+	REST API
+	Schema Registry
+
+Mirror Maker
+
+-----------------
+
+
+Zookeeper port : localhost:2181
+.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+
+Broker
+	id :100
+	log-dir = /tmp/kafka-logs100
+	port :9093
+
+.\bin\windows\kafka-server-start.bat .\config\server.properties
+
+ Topic :
+	
+
+
+
+--------------------------
+
+
+Spark Streaming
+
+- Framework on top of spark core
+- Stream processing
+- Near real-time
+- DStream = RDD[ time based data]
+- StreamingContext
+
+- Dstream + FP
+
+Spark Streaming Streaming
+
+- 1 stream = 1 row of Dataframe
+- Schema+ data
+- Spark SQL modules
+- Optimized
+
+Source
+	
+Sink
+
+Outputmode
+	append
+	Update
+	Complete
+
+Checkpoint
+
+
+Stateless : 1 result = 1 stream
+Statefull : 1 result = multiple streams
+    - Window  : time
+    - preserve intermmediate result
+
+
+-----------------
+
+Spark 
+	koalas
+Python : panda 
 
 
 
