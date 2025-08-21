@@ -1,0 +1,269 @@
+schema evolution in pyspark
+
+
+What is Schema Evolution in PySpark?
+
+Schema evolution means modifying the schema of a DataFrame or a table over time without breaking existing data.
+This usually comes into play when:
+
+New columns are added,
+
+Existing columns change data types,
+
+Or schemas differ between different data sources (like multiple JSON, Parquet, or Delta files).
+
+PySpark supports schema evolution primarily in Parquet, Avro, and Delta Lake formats.
+
+🔹 Schema Evolution in Parquet
+
+When reading Parquet files with different schemas:
+
+df = spark.read.option("mergeSchema", "true").parquet("path/to/parquet/files")
+
+
+mergeSchema ensures Spark merges schemas from all files.
+
+Example:
+
+File1 has columns (id, name)
+
+File2 has columns (id, name, age)
+
+Final schema will be (id, name, age).
+
+🔹 Schema Evolution in Delta Lake (Recommended)
+
+Delta Lake (commonly used with PySpark) handles schema evolution more gracefully.
+
+1. Automatic Schema Merge (when writing)
+
+df.write.format("delta") \
+    .option("mergeSchema", "true") \
+    .mode("append") \
+    .save("/path/to/delta-table")
+
+
+mergeSchema lets you add new columns when appending data.
+
+2. Schema Overwrite (when replacing table)
+
+df.write.format("delta") \
+    .option("overwriteSchema", "true") \
+    .mode("overwrite") \
+    .save("/path/to/delta-table")
+
+
+Use overwriteSchema if you want the new DataFrame schema to replace the existing table schema.
+
+🔹 Example: Adding New Column in Delta
+# Old schema: id, name
+df1 = spark.createDataFrame([(1, "A"), (2, "B")], ["id", "name"])
+df1.write.format("delta").mode("overwrite").save("/tmp/delta-table")
+
+# New schema: id, name, age
+df2 = spark.createDataFrame([(3, "C", 25)], ["id", "name", "age"])
+df2.write.format("delta") \
+    .option("mergeSchema", "true") \
+    .mode("append") \
+    .save("/tmp/delta-table")
+
+# Result schema: id, name, age
+df_merged = spark.read.format("delta").load("/tmp/delta-table")
+df_merged.show()
+
+🔹 Important Points
+
+mergeSchema = true → use for evolving schema while appending.
+
+overwriteSchema = true → use when replacing schema entirely.
+
+Schema evolution is supported in Delta, Avro, Parquet.
+
+Not all sources (like CSV, JSON) support schema evolution directly—you need explicit schema management.
+
+
+----------------------
+
+Schema evolution in Delta Lake with PySpark allows you to handle changes in the structure of your data over time (like adding new columns, changing column data types where allowed, etc.) without manually recreating the table.
+
+Delta Lake supports schema evolution both in batch writes and streaming writes.
+
+🔑 Key Configurations
+
+To enable schema evolution in PySpark with Delta:
+
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+
+Without this, Delta will throw an error if the schema of the DataFrame does not match the existing Delta table schema.
+
+1. Example: Adding New Columns
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+
+spark = SparkSession.builder \
+    .appName("DeltaSchemaEvolution") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
+
+# Write initial data
+data1 = [(1, "Alice"), (2, "Bob")]
+df1 = spark.createDataFrame(data1, ["id", "name"])
+
+df1.write.format("delta").mode("overwrite").save("/tmp/delta/schema_evolution")
+
+# Add a new column
+data2 = [(3, "Charlie", 25), (4, "David", 30)]
+df2 = spark.createDataFrame(data2, ["id", "name", "age"])
+
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+df2.write.format("delta").mode("append").save("/tmp/delta/schema_evolution")
+
+
+✅ Here, Delta Lake will add the new column age automatically because of autoMerge.
+
+2. Example: Merging with Schema Evolution
+
+Schema evolution is especially useful with merge (upsert):
+
+from delta.tables import DeltaTable
+
+# Load table
+deltaTable = DeltaTable.forPath(spark, "/tmp/delta/schema_evolution")
+
+# Incoming data with a new column 'city'
+data3 = [(5, "Eve", 28, "New York"), (2, "Bob", 31, "Chicago")]
+df3 = spark.createDataFrame(data3, ["id", "name", "age", "city"])
+
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+# Merge with schema evolution
+deltaTable.alias("t").merge(
+    df3.alias("s"),
+    "t.id = s.id"
+).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+
+
+✅ Now, city column will be added to the schema and merged.
+
+3. Supported Schema Evolution Operations
+
+Delta supports:
+
+Adding new columns
+
+Reordering columns (logical order doesn’t matter)
+
+Promoting column types (e.g., Integer → Long, Float → Double)
+
+❌ Not supported directly:
+
+Dropping columns
+
+Renaming columns
+
+Arbitrary type changes (like String → Integer)
+
+For those, you need to manually recreate the table or use selectExpr to cast columns.
+
+4. Schema Evolution in Streaming
+# Example: streaming append with new column
+streamingDF = spark.readStream.format("rate").option("rowsPerSecond", 1).load()
+streamingDF = streamingDF.withColumn("extra_col", F.lit("new"))
+
+query = streamingDF.writeStream \
+    .format("delta") \
+    .option("checkpointLocation", "/tmp/delta/schema_evolution/_checkpoints") \
+    .outputMode("append") \
+    .start("/tmp/delta/schema_evolution")
+
+
+With autoMerge.enabled, the new column will evolve.
+
+✅ Summary
+
+Enable spark.databricks.delta.schema.autoMerge.enabled=true.
+
+Schema evolution works for append, merge, and streaming writes.
+
+Supports adding new columns & widening data types.
+
+Doesn’t support dropping/renaming columns automatically.
+
+Do you want me to also show you a step-by-step demo script that you can run on your local PySpark (Windows) to test schema evolution with Delta Lake?
+
+You said:
+Do you want me to also show you a step-by-step demo script that you can run on your local PySpark (Windows) to test schema evolution with Delta Lake?
+ChatGPT said:
+
+Perfect 👍 — since you’re running PySpark on Windows and already experimenting with Delta, I’ll give you a step-by-step demo script that you can copy-paste and run locally. This will show schema evolution in action (adding new columns & merging schemas).
+
+🔧 Prerequisites
+
+Install PySpark (you already have).
+
+Install delta-spark package:
+
+pip install delta-spark
+
+📝 Step-by-Step Demo: Schema Evolution in Delta Lake (Windows)
+from pyspark.sql import SparkSession
+from delta.tables import DeltaTable
+
+# 1. Create SparkSession with Delta enabled
+spark = SparkSession.builder \
+    .appName("DeltaSchemaEvolutionDemo") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
+
+# Set Delta to allow schema evolution
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+# Path for Delta table (change if needed)
+delta_path = "file:///C:/tmp/delta/schema_evolution"
+
+# 2. Write initial DataFrame
+data1 = [(1, "Alice"), (2, "Bob")]
+df1 = spark.createDataFrame(data1, ["id", "name"])
+
+df1.write.format("delta").mode("overwrite").save(delta_path)
+
+print("\n=== Step 1: Initial Table ===")
+spark.read.format("delta").load(delta_path).show()
+
+# 3. Append new data with an extra column 'age'
+data2 = [(3, "Charlie", 25), (4, "David", 30)]
+df2 = spark.createDataFrame(data2, ["id", "name", "age"])
+
+df2.write.format("delta").mode("append").save(delta_path)
+
+print("\n=== Step 2: After Adding Column 'age' ===")
+spark.read.format("delta").load(delta_path).show()
+
+# 4. Merge with new column 'city'
+deltaTable = DeltaTable.forPath(spark, delta_path)
+
+data3 = [(5, "Eve", 28, "New York"), (2, "Bob", 31, "Chicago")]
+df3 = spark.createDataFrame(data3, ["id", "name", "age", "city"])
+
+deltaTable.alias("t").merge(
+    df3.alias("s"),
+    "t.id = s.id"
+).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+
+print("\n=== Step 3: After Merge with 'city' Column ===")
+spark.read.format("delta").load(delta_path).show()
+
+# 5. Stop Spark session
+spark.stop()
+
+✅ What This Demo Shows
+
+Initial Table → only id and name.
+
+After Append → Delta automatically adds age column.
+
+After Merge → Delta automatically adds city column and updates existing rows.
