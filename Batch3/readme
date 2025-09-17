@@ -929,6 +929,72 @@ Use repartition when you need balanced parallelism.
 
 Use coalesce when you’re reducing partitions after filtering.
 
+-----------------------
+
+package myscalacodeExamples
+
+import org.apache.log4j.{Level, Logger}
+import org.apache.spark.sql.SparkSession
+import io.delta.tables
+import io.delta.tables.DeltaTable
+object DeltalakeCodeExample {
+  def main(args: Array[String]): Unit = {
+
+    Logger.getLogger("org").setLevel(Level.OFF)
+    Logger.getLogger("akka").setLevel(Level.OFF)
+
+    val spark = SparkSession.builder()
+      .appName("delta lake code")
+      .master("local[3]")
+      .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+      .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      .getOrCreate()
+
+    spark.sparkContext.setLogLevel("ERROR")
+  DeltaTable.create(spark).tableName("employees")
+    .addColumn("emp_id","INTEGER")
+    .addColumn("ename","STRING")
+    .addColumn("salary","LONG")
+    .location("C:\\Users\\Krishna\\data\\empdata").execute()
+
+
+    val tb = DeltaTable.forName(spark,"employees")
+    tb.history().show()
+
+    tb.toDF.createTempView("emp")
+
+
+    spark.sql("insert into emp( emp_id,ename,salary) values(100,'Ram',10000)")
+    spark.sql("insert into emp( emp_id,ename,salary) values(200,'Sia',12000)")
+    spark.sql("select * from emp").show()
+    tb.history().show()
+    println("---------------Update------------------")
+    spark.sql("update emp set  salary =20000 where emp_id=100")
+    spark.sql("select * from emp").show()
+    tb.history().show()
+    println("---------------Delete------------------")
+    tb.delete("emp_id = 200")
+    spark.sql("select * from emp").show()
+    tb.history().show()
+    println("---------------Restore------------------")
+       tb.restoreToVersion(4).show()
+    spark.sql("select * from emp").show()
+    tb.history().show
+    println("---------------Optimize------------------")
+    tb.optimize().executeCompaction()
+    spark.sql("select * from emp").show()
+    tb.history().show
+    println("---------------Vacuum------------------")
+    spark.conf.set("spark.databricks.delta.retentionDurationCheck.enabled",false)
+    tb.vacuum(retentionHours = 0)
+    println("not done")
+    spark.sql("select * from emp").show()
+    tb.history().show()
+  }
+
+}
+
+
 Use custom partitioners/bucketing for repeated joins/shuffles on the same key.
 
 Let AQE handle skew and partition sizing dynamically.
