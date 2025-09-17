@@ -443,127 +443,492 @@ Spark
 Python : panda 
 
 
+--------------------
+Spark UDF
 
+val tempDF=sparkSession.createDataFrame(Seq(
+   ("rahul sharma",32,"Patna",20000,"Store Manager"),
+  ("Joy don",30,"NY",23455,"Developer"),
+  ("Steve boy",42,"Delhi",294884,"Developer"))
+ ).toDF("name","age","city","salary","designation")
 
+Write a Scala function to get first name of a person and test it 
 
+def getFistName= (name: String) => {
+   val temp:Array[String]=name.split(" ")
+   temp(0)
+}
 
 
+Now, above function is ready to be called but before that we need to register it.
 
+val getFistNameUDF = sparkSession.udf.register("fist_name",getFistName)
+this can be also used as string expression for example -tempDF.selectExpr("fist_name(name)").show(2)
+another way to register: 
+import org.apache.spark.sql.functions.udf
+val getFistNameUDF = udf(getFistName)
 
+Finally, we will use it with our Dataframe. Now it can be called as normal SQL function.
 
+val finalDF=tempDF.withColumn("first name",getFistNameUDF(col("name")))
+  .withColumn("is_manager",isManagerUDF(col("designation")))
 
+----------------
 
+User Defined Aggregate Functions (UDAFs) in Apache Spark
 
+User-Defined Aggregate Functions (UDAFs) are user-programmable routines that act on multiple rows at once and return a single aggregated value as a result.
 
+Defining UDAFs
 
+Following steps need to be taken to define a Spark UDF:
 
+Define the UDAF functionality by extending the Aggregator class (org.apache.spark.sql.expressions.Aggregator)
+Register the UDAFs as untyped UDAFs by calling the spark.udf.register function so that they can be used with untyped DataFrames. Note that this step is not needed if the aggregator is to be used with custom typed DataSet class.
+Use the UDAF in Spark SQL clauses.
 
+-
+Lets start with a simple example. 
 
+lets define a UDAF that returns the sum of numbers for each group. 
+This implementation is equivalent to implementing the sum function found in Spark SQL. As mentioned before, the first step is to extend the Aggregator class to 
+create an object called SumUdaf:
 
+package myscalacodeExamples
 
 
+import org.apache.spark.sql.{Encoder, Encoders}
+import org.apache.spark.sql.expressions.Aggregator
 
+object SumUdf  extends  Aggregator[Int,Int,Int]{
+  override def zero: Int = 0
 
+  override def reduce(buffer: Int, newValue: Int): Int = {
+    println(s"Reduce called: buffer: ${buffer} - newValue: ${newValue}")
+    buffer + newValue
+  }
 
+  override def merge(intermediateValue1: Int, intermediateValue2: Int): Int = {
+    println(s"Merge called: ival1: ${intermediateValue1} - ival2: ${intermediateValue2}")
+    intermediateValue1 + intermediateValue2
+  }
 
- 
+  override def finish(reduction: Int): Int = {
+    println(s"Finish called: ${reduction}")
+    reduction
+  }
 
+  override def bufferEncoder: Encoder[Int] = Encoders.scalaInt
 
+  override def outputEncoder: Encoder[Int] = Encoders.scalaInt
+}
 
 
+The implementation extends the Aggregator[-IN, BUF, OUT] class. The three type parameters to the Aggregator class are:
 
+IN: the type of input data, this is set to Int because the UDAF will take and sum integers.
+BUF: This is the type used by internal buffers that are computed during the reduce calls.
+OUT: This is the output type, type of the result that will be returned by the UDAF function.
+Next, the following methods need to be overwritten when implementing the UDAF:
 
+zero: This function is called to initialize the internal buffers that are filled up to calculate the final value. For the sum operation, this initialized the initial value to 0.
 
+reduce: This function is called to add to calculate intermediate values, and it is called for each value in the group. The official document recommends to modify
+the buffered object instead of creating a new object and assigning to it for better performance.
 
+merge: This is called when two buffers containing intermediate values are merged. Because each buffer for the sum operation contains intermediate sum, we simply 
+add the two intermediate sums here.
 
+finish: This function is called at the end, and once per each group. This is used to convert the final state of the buffer into the final output. For the sum
+operation, we already have the final sum, so in this function, the sum is simply returned.
 
+bufferEncoder: This specifies the encoder for intermediate buffer. In our example, it is Encoders.scalaInt
 
+outputEncoder: This specifies the encoder for output. In our example, it is Encoders.scalaInt
 
 
+Additionally, println statements have been added to each call of the functions of the UDAF to take a peek into its internal values for better understanding.
 
+package myscalacodeExamples
 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
 
+object UseUDAFcode {
+  def main(args: Array[String]): Unit = {
+   val spark= SparkSession
+      .builder()
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.sql.caseSensitive", value = true)
+      .appName("udaf")
+      .master("local[3]")
+      .getOrCreate()
 
+    // Register the SumUdaf UDAF with the name "SumUdaf" so that it can be used in SQL expressions
+    spark.udf.register("SumUdaf", udaf(SumUdf))
 
+    // Import Spark implicits to enable easy conversion of Scala data types to DataFrames
+    import spark.implicits._
 
+    // Create a DataFrame of integer values from 1 to 10 and add a column that indicates whether each number is odd or even
+    val testDf = Seq(
+      (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)
+    )
+      .toDF("number")
+      .withColumn("mod", col("number") % 2)
 
+    // Display the contents of the DataFrame in the console
+    testDf.show(truncate = false)
 
+    // Group the DataFrame by the "mod" column and aggregate the "number" column using the SumUdaf UDAF
+    testDf
+      .groupBy("mod")
+      .agg(expr("SumUdaf(number)"))
+      .show(truncate = false)
+  }
+}
 
+---------------------------
 
+Partition
 
+In Spark, partitions control how your data is split across the cluster. The number of partitions affects parallelism, performance, and shuffle cost.
 
+You can increase or decrease partitions in Spark depending on your use case.
 
+🔹 Ways to Change Partitions
+1. During Read
 
+When you load data, you can control partitions:
 
+// Example: reading CSV with custom partitions
+val df = spark.read
+  .option("header", "true")
+  .csv("data.csv")
+  .repartition(10)   // force 10 partitions
 
+2. Repartition (Shuffle)
 
+Creates new partitions with a full shuffle of the data.
 
+Used when you want to increase parallelism or balance data.
 
+val repartitioned = df.repartition(20) // shuffle to 20 partitions
 
 
+You can also partition by column:
 
+val repartitionedByCol = df.repartition(10, col("category"))
 
+3. Coalesce (No Shuffle / Minimal Shuffle)
 
+Used to reduce partitions (e.g., from 200 to 20).
 
+Avoids full shuffle → faster than repartition.
 
+Best when reducing partitions after filtering.
 
+val fewerPartitions = df.coalesce(5)
 
+4. RepartitionByRange
 
+Spark 2.3+ feature for range-based partitioning (good for sorting).
 
+val rangePartitioned = df.repartitionByRange(10, col("value"))
 
+5. RDD Way
 
+If you’re working with RDDs:
 
+val rdd = sc.parallelize(1 to 100, 10) // create with 10 partitions
 
+val more = rdd.repartition(20)  // increase with shuffle
+val less = rdd.coalesce(5)      // decrease without shuffle
 
+⚡ When to Use What
 
+Increase partitions → use repartition()
 
+Decrease partitions → use coalesce() (faster, less shuffle)
 
+Partition by column → repartition(numPartitions, col)
 
+For sorting efficiency → repartitionByRange()
 
+👉 Do you want me to also explain how to check the current number of partitions in your DataFrame/RDD?
 
+You said:
+repartitionByRange() in spark example 
+ChatGPT said:
 
+Got it 👍 Let’s walk through a clear repartitionByRange() example in Spark.
 
+🔹 What repartitionByRange() Does
 
+Introduced in Spark 2.3+.
 
+Partitions rows into a given number of partitions based on column ranges.
 
+Useful when you want sorted-like partitions (e.g., preparing data for range joins, bucketing, or distributed sorting).
 
+🔹 Example in Scala (DataFrame API)
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
 
+val spark = SparkSession.builder()
+  .appName("RepartitionByRangeExample")
+  .master("local[*]")
+  .getOrCreate()
 
+import spark.implicits._
 
+// Sample DataFrame
+val df = Seq(
+  (1, "A"),
+  (5, "B"),
+  (10, "C"),
+  (15, "D"),
+  (20, "E"),
+  (25, "F")
+).toDF("id", "name")
 
+println("Before partitioning: " + df.rdd.getNumPartitions)
 
+// Repartition by range on column "id"
+val dfRange = df.repartitionByRange(3, col("id"))
 
+println("After repartitioning: " + dfRange.rdd.getNumPartitions)
 
+// Show partition-wise distribution
+dfRange
+  .mapPartitionsWithIndex((i, iter) => iter.map(x => (i, x)))
+  .show(false)
 
+🔹 Expected Output
 
+Data will be divided into 3 partitions based on the range of id values.
 
+Each partition contains a range of ids (not random like repartition()).
 
+Example partition distribution:
 
+Partition 0 -> ids [1, 5, 10]
+Partition 1 -> ids [15, 20]
+Partition 2 -> ids [25]
 
+🔹 Key Notes
 
+repartitionByRange(n, col) guarantees range-based grouping, unlike repartition(n, col) which only ensures hash partitioning.
 
+Good for range joins and ordered writes (like ORC/Parquet partitioned tables).
 
+Still triggers a shuffle under the hood.
 
 
+-----
 
+Skewness
 
+Causes of Data Skewness
+There are several potential causes of data skewness in Spark applications:
 
+Skewed Data Distribution: Real-world data is often distributed unevenly. Some keys may have a high number of occurrences (hot keys), causing a skewed distribution of data across partitions.
 
+Inadequate Partitioning Strategy: The default partitioning strategy in Spark might not always be the most efficient for your specific dataset. For example, the default Hash Partitioning strategy might cause data skewness if certain keys hash to the same partition.
 
+Join Operations: When performing join operations, if the keys in the datasets being joined are not evenly distributed, it can result in a skew. This is especially prominent in cases where a large dataset is joined with a small dataset on a non-unique key.
 
+GroupBy Operations: Similar to join operations, GroupBy operations can also cause data skewness when certain keys have many more values than others.
 
+Handling Data Skewness in Apache Spark
+Although data skewness can impact your Spark application’s performance significantly, several strategies can help manage and mitigate this issue:
 
+Custom Partitioning: Instead of relying on Spark’s default partitioning strategy, implementing a custom partitioning strategy can help distribute data more evenly across partitions. For example, range partitioning can be more effective when dealing with numeric keys.
+Salting: Salting is a technique where a random value (salt) is appended to the key, which helps distribute the data more evenly across partitions. This can be particularly useful when dealing with hot keys.
 
+Dynamic Partition Pruning: Dynamic partition pruning is a technique used in Spark to optimize join operations by skipping the scanning of irrelevant partitions in both datasets. This can help improve performance in the case of data skewness caused by join operations.
 
+Splitting Skewed Data: Another strategy is to split the skewed data across multiple partitions. This involves identifying the skewed keys and redistributing the data associated with these keys.
 
+Avoid GroupBy for Large Datasets: When possible, avoid using GroupBy operations on large datasets with non-unique keys. Alternatives such as reduceByKey, which performs a combine operation locally on each partition before performing the grouping operation, can be more efficient.
+In Spark, data skewness happens when some keys/partitions have disproportionately more data than others, leading to stragglers (slow tasks). Spark has several strategies to handle skewness.
 
+Here’s a breakdown with Scala code examples:
 
+1. Salting Keys (Manual Key Skew Handling)
 
+Add a random "salt" to keys so data gets distributed more evenly.
 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
+import scala.util.Random
 
+val spark = SparkSession.builder.appName("SkewExample").getOrCreate()
+import spark.implicits._
 
+// Example skewed data
+val skewedDF = Seq(
+  ("A", 1), ("A", 2), ("A", 3), ("A", 4), ("A", 5),
+  ("B", 1), ("C", 1)
+).toDF("key", "value")
 
+// Add salt to skewed keys
+val saltedDF = skewedDF.withColumn("salted_key", concat(
+  col("key"),
+  lit("_"),
+  (rand() * 3).cast("int")  // add randomness to distribute
+))
 
+// Example join with salted key
+val smallDF = Seq(
+  ("A_0", "data"), ("A_1", "data"), ("A_2", "data"),
+  ("B_0", "data"), ("C_0", "data")
+).toDF("salted_key", "info")
 
+val joined = saltedDF.join(smallDF, "salted_key")
+joined.show(false)
 
 
+👉 This prevents all "A" records from going into one partition.
+
+2. Skew Join Hint (Spark 3.2+)
+
+Spark automatically handles skewed joins if you give it a hint:
+
+val df1 = spark.range(0, 1000000).withColumn("key", col("id") % 10)
+val df2 = spark.range(0, 10).withColumn("key", col("id"))
+
+// Join with skew hint
+val result = df1.join(df2.hint("skew"), Seq("key"))
+result.explain(true)
+
+
+👉 Spark detects skewed keys and breaks them into multiple partitions.
+
+3. Broadcast Join
+
+If one table is small, broadcast it to avoid shuffles.
+
+val largeDF = spark.range(0, 1000000).withColumn("key", col("id") % 2)
+val smallDF = spark.range(0, 2).withColumn("key", col("id"))
+
+val joined = largeDF.join(broadcast(smallDF), "key")
+joined.show()
+
+
+👉 No skew since smallDF is broadcasted.
+
+4. Repartition Skewed Keys
+
+Force repartition on skewed column before join/aggregation:
+
+val df = spark.range(0, 1000000).withColumn("key", col("id") % 2)
+
+// Repartition by key
+val repartitioned = df.repartition(100, col("key"))
+val agg = repartitioned.groupBy("key").count()
+agg.show()
+
+
+👉 Helps balance load across executors.
+
+5. Adaptive Query Execution (AQE) with Skew Join Handling
+
+Enable AQE and let Spark handle skew automatically:
+
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+
+val df1 = spark.range(0, 1000000).withColumn("key", col("id") % 2)
+val df2 = spark.range(0, 1000).withColumn("key", col("id") % 2)
+
+val joined = df1.join(df2, "key")
+joined.explain(true)
+
+
+👉 Spark detects skewed partitions at runtime and splits them into smaller ones.
+
+✅ Summary:
+
+Use salting for custom control.
+
+Use broadcast joins when one side is small.
+
+Use repartitioning for better load distribution.
+
+Use AQE + skew join hint for automatic handling.
+
+--------------------------
+
+change the spark partitioning stretegy
+
+
+you can change Spark’s partitioning strategy, both at the DataFrame/Dataset level and at the RDD level. Partitioning controls how Spark distributes data across executors, which directly affects performance of shuffles, joins, and aggregations.
+
+Here are the main ways:
+
+1. Repartition / Coalesce (DataFrame API)
+
+repartition(n) → increases or decreases partitions (full shuffle).
+
+repartition(col) → repartitions by column(s), like hash partitioning.
+
+repartitionByRange(col1, col2, …) → range partitioning.
+
+coalesce(n) → reduces partitions without full shuffle.
+
+// Hash partitioning on "id"
+df.repartition(10, $"id")
+
+// Range partitioning on "amount"
+df.repartitionByRange(5, $"amount")
+
+2. Custom Partitioners (RDD API)
+
+If you need full control (e.g., consistent partitioning across multiple stages):
+
+HashPartitioner → partitions based on hash(key).
+
+RangePartitioner → partitions based on sorted ranges.
+
+Custom Partitioner → you can write your own by extending Partitioner.
+
+val rdd = sc.parallelize(Seq((1,"a"),(2,"b"),(3,"c")))
+val partitioned = rdd.partitionBy(new HashPartitioner(3))
+
+3. Bucketing in Spark SQL
+
+For persistent partitioning across queries, you can bucket tables:
+
+CREATE TABLE t_bucketed
+USING parquet
+CLUSTERED BY (user_id) INTO 8 BUCKETS
+AS SELECT * FROM users;
+
+
+This ensures future joins/shuffles on user_id are faster.
+
+4. Adaptive Query Execution (AQE)
+
+From Spark 3.x, AQE can dynamically change partitioning at runtime:
+
+Coalesces small partitions.
+
+Splits skewed partitions.
+
+Chooses better join strategies.
+
+Enable it:
+
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+
+
+🔑 Rule of Thumb:
+
+Use repartition when you need balanced parallelism.
+
+Use coalesce when you’re reducing partitions after filtering.
+
+Use custom partitioners/bucketing for repeated joins/shuffles on the same key.
+
+Let AQE handle skew and partition sizing dynamically.
